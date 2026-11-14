@@ -86,6 +86,7 @@ memory/test_credentials.md
 /.emergent/system_deps.txt
 /.config/
 /.local/
+/.gitconfig
 
 # Mobile development
 android-sdk/
