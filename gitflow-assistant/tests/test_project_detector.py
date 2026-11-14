@@ -80,3 +80,13 @@ def test_backup_is_non_destructive(repo: Path, tmp_path: Path) -> None:
     git(tmp_path, "clone", "-q", str(info.path / "repository.bundle"), str(restored))
     assert (restored / "README.md").exists()
     assert backup_service.list_backups(tmp_path / "backups")[0].files == 1
+
+
+def test_backup_does_not_overwrite_when_timestamp_collides(repo: Path, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(backup_service.time, "time_ns", lambda: 1)
+    backups = tmp_path / "backups"
+    first = backup_service.create_backup(GitEngine(repo), backups)
+    second = backup_service.create_backup(GitEngine(repo), backups)
+    assert first.path != second.path
+    assert (first.path / "manifest.json").is_file()
+    assert (second.path / "manifest.json").is_file()

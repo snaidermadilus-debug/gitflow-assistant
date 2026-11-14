@@ -14,6 +14,7 @@ import pytest
 from gitflow_assistant.core.github_client import (
     GitHubAuthError,
     GitHubClient,
+    GitHubError,
     GitHubRateLimitError,
     parse_github_remote,
     web_url_for_remote,
@@ -68,6 +69,19 @@ def test_requires_token() -> None:
         GitHubClient(None).user()
 
 
+@pytest.mark.parametrize(
+    "api_url",
+    [
+        "http://api.github.com",
+        "https://user:pass@api.github.com",
+        "https://api.github.com?token=secret",
+    ],
+)
+def test_api_url_cannot_leak_token(api_url: str) -> None:
+    with pytest.raises(GitHubError, match="must use HTTPS"):
+        GitHubClient("token", api_url=api_url)
+
+
 def test_create_repo_request() -> None:
     opener = FakeOpener([FakeResponse({"full_name": "me/x", "name": "x", "owner": {"login": "me"}, "private": True,
                                        "clone_url": "https://github.com/me/x.git", "html_url": "https://github.com/me/x"},
@@ -87,6 +101,24 @@ def test_pagination_follows_link_header() -> None:
     opener = FakeOpener([page1, page2])
     repos = GitHubClient("t", opener=opener).list_repos(limit=10)
     assert [r.name for r in repos] == ["a", "b"] and len(opener.requests) == 2
+
+
+def test_pagination_rejects_external_links() -> None:
+    page = FakeResponse(
+        [{"full_name": "me/a", "name": "a"}],
+        {"Link": '<https://attacker.example/steal>; rel="next"'},
+    )
+    opener = FakeOpener([page])
+    with pytest.raises(GitHubError, match="outside the configured GitHub API"):
+        GitHubClient("token", opener=opener).list_repos(limit=10)
+    assert len(opener.requests) == 1
+
+
+def test_repository_path_segments_cannot_escape_endpoint() -> None:
+    with pytest.raises(GitHubError, match="invalid GitHub owner"):
+        GitHubClient("token").get_repo("../user", "repos")
+    with pytest.raises(GitHubError, match="invalid GitHub owner"):
+        GitHubClient("token").get_repo("owner/other", "repo")
 
 
 def test_rate_limit_and_auth_errors() -> None:

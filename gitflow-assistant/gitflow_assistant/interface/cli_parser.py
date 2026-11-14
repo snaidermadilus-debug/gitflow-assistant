@@ -223,6 +223,7 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--key-stdin", action="store_true", help=t("help.key_stdin"))
     a.add_argument("--store", action="store_true", help=t("help.store"))
     ais.add_parser("logout")
+    ais.add_parser("chat", help=t("help.ai_chat"))
     ais.add_parser("commit-message")
     a = ais.add_parser("summary")
     a.add_argument("refs", nargs="*", metavar="REF")

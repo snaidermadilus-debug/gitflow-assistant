@@ -40,8 +40,17 @@ def backups_root() -> Path:
 def create_backup(engine: GitEngine, destination_root: Optional[Path] = None) -> BackupInfo:
     """Create a backup of history and uncommitted work. Nothing in the project is modified."""
     root = engine.root() or engine.cwd
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    target = ensure_dir((destination_root or backups_root()) / f"{root.name}-{stamp}")
+    stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{time.time_ns()}"
+    base = ensure_dir(destination_root or backups_root())
+    target = base / f"{root.name}-{stamp}"
+    suffix = 1
+    while True:
+        try:
+            target.mkdir()
+            break
+        except FileExistsError:
+            target = base / f"{root.name}-{stamp}-{suffix}"
+            suffix += 1
     head = engine.head_sha() or ""
     if engine.has_commits():
         engine.bundle(target / "repository.bundle")

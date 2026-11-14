@@ -1,5 +1,7 @@
 """Server-side date helpers. The pod clock is UTC — anchor "today" here, never in the browser."""
 
+from __future__ import annotations
+
 import os
 from datetime import datetime
 from zoneinfo import ZoneInfo

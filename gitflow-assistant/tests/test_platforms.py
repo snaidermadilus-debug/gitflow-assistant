@@ -97,6 +97,8 @@ def test_configuration_set_get_coerce_persist(tmp_path: Path) -> None:
         cfg.set("unknown.key", "1")
     with pytest.raises(ConfigError):
         cfg.set("timeouts.git", "abc")
+    with pytest.raises(ConfigError, match="greater than zero"):
+        cfg.set("timeouts.git", "0")
     with pytest.raises(ConfigError):
         cfg.set("github.token", "x")
 
@@ -114,6 +116,17 @@ def test_export_import_without_secrets(tmp_path: Path) -> None:
     ignored = other.import_from(tmp_path / "in.json")
     assert other.get("language") == "es" and other.get("aliases")["x"] == "doctor"
     assert set(ignored) == {"api_token", "bogus"}
+
+
+def test_secret_key_variants_are_not_persisted(tmp_path: Path) -> None:
+    path = tmp_path / "c.json"
+    path.write_text(json.dumps({"secret_key": "do-not-store", "gemini_key": "also-secret",
+                                "public_key_id": "not-a-secret", "accessToken": "token",
+                                "privateKey": "private", "apiKey": "api"}), encoding="utf-8")
+    cfg = Configuration(path=path)
+    assert cfg.user == {"public_key_id": "not-a-secret"}
+    with pytest.raises(ConfigError):
+        cfg.set("github.secret_key", "do-not-store")
 
 
 def test_corrupt_config_is_reported_not_overwritten(tmp_path: Path) -> None:

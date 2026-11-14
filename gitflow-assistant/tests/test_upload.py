@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 
 from conftest import git
-from gitflow_assistant.core.git_engine import GitEngine
+from gitflow_assistant.core.git_engine import GitEngine, GitResult
 from gitflow_assistant.services import branch_service, clone_service
-from gitflow_assistant.services.errors import Cancelled, SecurityBlocked, UsageError
+from gitflow_assistant.services.errors import Cancelled, RemoteOperationFailed, SecurityBlocked, UsageError
 from gitflow_assistant.services.upload_service import PublishOptions, commit_step, publish, update
 
 SECRET = 'STRIPE = "sk_live_' + "abcdefghijklmnopqrstuvwx" + '"\n'
@@ -142,3 +142,54 @@ def test_clone_service_and_branch_switch_with_stash(bare_remote: Path, repo: Pat
     branch_service.switch(ctx, engine, "feature", stash=True)
     assert engine.current_branch() == "feature"
     assert "gitflow: before switching" in git(dest, "stash", "list")
+
+
+def test_clone_credentials_are_redacted_from_output_and_history(tmp_path: Path, make_ctx, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from gitflow_assistant.services import clone_service
+
+    ctx = make_ctx(interactive=False)
+    destination = tmp_path / "private-repo"
+    url = "https://alice:secret-password@example.com/private-repo.git"
+
+    monkeypatch.setattr(
+        GitEngine,
+        "clone",
+        lambda self, *args, **kwargs: GitResult(["clone"], 0, "", ""),
+    )
+    monkeypatch.setattr(GitEngine, "is_repository", lambda self: True)
+
+    clone_service.clone(ctx, url, destination)
+
+    assert "secret-password" not in ctx.ui.text()
+    assert "secret-password" not in ctx.history.list()[0].detail
+    assert "https://***@example.com/private-repo.git" in ctx.history.list()[0].detail
+
+
+def test_clone_failure_redacts_credentials(tmp_path: Path, make_ctx, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    ctx = make_ctx(interactive=False)
+    url = "https://alice:secret-password@example.com/private-repo.git"
+    monkeypatch.setattr(
+        GitEngine,
+        "clone",
+        lambda self, *args, **kwargs: GitResult(
+            ["clone"], 128, "", f"fatal: unable to access '{url}': authentication failed"
+        ),
+    )
+
+    with pytest.raises(RemoteOperationFailed) as exc:
+        clone_service.clone(ctx, url, tmp_path / "private-repo")
+
+    assert "secret-password" not in str(exc.value)
+    assert "secret-password" not in ctx.history.list()[0].detail
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://alice:password@example.com/group/project.git?token=secret", "project"),
+        ("git@example.com:group/project.git", "project"),
+        (r"C:\repos\project.git", "project"),
+    ],
+)
+def test_repo_name_from_url(url: str, expected: str) -> None:
+    assert clone_service.repo_name_from_url(url) == expected

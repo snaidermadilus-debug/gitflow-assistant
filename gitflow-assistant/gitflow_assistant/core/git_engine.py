@@ -35,6 +35,9 @@ log = logging.getLogger("gitflow.git")
 DEFAULT_TIMEOUT = 60
 NETWORK_TIMEOUT = 300
 _URL_CRED = re.compile(r"(?P<scheme>[a-z][a-z0-9+.-]*://)(?P<cred>[^/@\s]+)@", re.IGNORECASE)
+_URL_QUERY_CRED = re.compile(
+    r"(?i)([?&](?:access[_-]?token|token|password|passwd|secret|api[_-]?key|key|auth|credential|client[_-]?secret)=)[^&#\s]*"
+)
 _TOKEN_LIKE = re.compile(r"\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b")
 FIELD_SEP = "\x1f"
 RECORD_SEP = "\x1e"
@@ -43,6 +46,7 @@ RECORD_SEP = "\x1e"
 def redact(text: str) -> str:
     """Remove credentials from URLs and GitHub token-like strings."""
     text = _URL_CRED.sub(lambda m: f"{m.group('scheme')}***@", text)
+    text = _URL_QUERY_CRED.sub(r"\1***", text)
     return _TOKEN_LIKE.sub("***", text)
 
 
@@ -382,6 +386,8 @@ class GitEngine:
     def staged_blob(self, path: str, max_bytes: int) -> bytes:
         """Read up to ``max_bytes`` of the staged content of ``path``."""
         validate_path_arg(path)
+        if max_bytes <= 0:
+            raise ValidationError("maximum staged blob size must be positive")
         argv = [self.git, "cat-file", "blob", f":{path}"]
         try:
             with subprocess.Popen(argv, cwd=str(self.cwd), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
@@ -389,15 +395,25 @@ class GitEngine:
                 assert proc.stdout is not None
                 data = proc.stdout.read(max_bytes)
                 proc.stdout.close()
-                proc.wait(timeout=self.timeout)
+                try:
+                    returncode = proc.wait(timeout=self.timeout)
+                except subprocess.TimeoutExpired as exc:
+                    proc.kill()
+                    proc.wait()
+                    raise GitError(f"timed out reading staged file: {path}") from exc
+                if len(data) < max_bytes and returncode != 0:
+                    raise GitError(f"cannot read staged file {path!r} (git cat-file exited {returncode})")
                 return data
-        except (OSError, subprocess.TimeoutExpired):
-            return b""
+        except OSError as exc:
+            raise GitError(f"cannot read staged file {path!r}: {exc}") from exc
 
     def staged_size(self, path: str) -> int:
         """Size in bytes of the staged blob of ``path``."""
-        res = self.run(["cat-file", "-s", f":{validate_path_arg(path)}"])
-        return int(res.stdout.strip()) if res.ok and res.stdout.strip().isdigit() else 0
+        clean = validate_path_arg(path)
+        res = self.run(["cat-file", "-s", f":{clean}"])
+        if not res.ok or not res.stdout.strip().isdigit():
+            raise GitError(f"cannot read staged file size for {clean!r}: {res.error_text()}", res)
+        return int(res.stdout.strip())
 
     def check_ignore(self, paths: Sequence[str]) -> List[str]:
         """Return the subset of ``paths`` ignored by .gitignore rules."""

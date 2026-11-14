@@ -96,6 +96,13 @@ def _next_link(link_header: str) -> Optional[str]:
     return None
 
 
+def _repository_segment(value: str) -> str:
+    """Encode a single GitHub owner/repository path segment."""
+    if not value or value in (".", "..") or "/" in value or "\\" in value:
+        raise GitHubError("invalid GitHub owner or repository name")
+    return urllib.parse.quote(value, safe="")
+
+
 Opener = Callable[[urllib.request.Request, int], Any]
 
 
@@ -108,6 +115,11 @@ class GitHubClient:
 
     def __init__(self, token: Optional[str], api_url: str = "https://api.github.com", timeout: int = 20,
                  opener: Opener = _default_opener) -> None:
+        parsed_api_url = urllib.parse.urlsplit(api_url)
+        if (parsed_api_url.scheme.lower() != "https" or not parsed_api_url.hostname
+                or parsed_api_url.username or parsed_api_url.password or parsed_api_url.query
+                or parsed_api_url.fragment):
+            raise GitHubError("GitHub API URL must use HTTPS and cannot include credentials, query, or fragment")
         self.token = token
         self.api_url = api_url.rstrip("/")
         self.timeout = timeout
@@ -174,6 +186,13 @@ class GitHubClient:
             next_url = _next_link(headers.get("link", ""))
             if len(items) >= limit or not next_url:
                 break
+            base = urllib.parse.urlsplit(self.api_url)
+            target = urllib.parse.urlsplit(next_url)
+            base_path = base.path.rstrip("/")
+            if (target.scheme != base.scheme or target.netloc.lower() != base.netloc.lower()
+                    or target.username or target.password or target.fragment
+                    or (base_path and not (target.path == base_path or target.path.startswith(base_path + "/")))):
+                raise GitHubError("refusing to follow a pagination link outside the configured GitHub API")
             data, headers = self._request("GET", "", full_url=next_url)
         return items[:limit]
 
@@ -196,7 +215,7 @@ class GitHubClient:
 
     def get_repo(self, owner: str, name: str) -> Repository:
         """Information about one repository."""
-        data, _ = self._request("GET", f"/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(name)}",
+        data, _ = self._request("GET", f"/repos/{_repository_segment(owner)}/{_repository_segment(name)}",
                                 auth_required=False)
         return Repository.from_api(data)
 
@@ -209,19 +228,19 @@ class GitHubClient:
 
     def update_description(self, owner: str, name: str, description: str) -> Repository:
         """Change the repository description."""
-        data, _ = self._request("PATCH", f"/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(name)}",
+        data, _ = self._request("PATCH", f"/repos/{_repository_segment(owner)}/{_repository_segment(name)}",
                                 body={"description": description})
         return Repository.from_api(data)
 
     def list_branches(self, owner: str, name: str, limit: int = 100) -> List[str]:
         """Branch names of a repository."""
-        raw = self._paginate(f"/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(name)}/branches", {}, limit)
+        raw = self._paginate(f"/repos/{_repository_segment(owner)}/{_repository_segment(name)}/branches", {}, limit)
         return [b.get("name", "") for b in raw]
 
     def list_commits(self, owner: str, name: str, branch: Optional[str] = None, limit: int = 20) -> List[Dict[str, str]]:
         """Recent commits of a repository."""
         params = {"sha": branch} if branch else {}
-        raw = self._paginate(f"/repos/{urllib.parse.quote(owner)}/{urllib.parse.quote(name)}/commits", params, limit)
+        raw = self._paginate(f"/repos/{_repository_segment(owner)}/{_repository_segment(name)}/commits", params, limit)
         return [{"sha": c.get("sha", "")[:7], "author": ((c.get("commit") or {}).get("author") or {}).get("name", ""),
                  "date": ((c.get("commit") or {}).get("author") or {}).get("date", ""),
                  "message": ((c.get("commit") or {}).get("message") or "").splitlines()[0] if c.get("commit") else ""}

@@ -15,7 +15,7 @@ Publique seu primeiro projeto sem decorar dezenas de comandos, ou automatize ope
 | Atualização | `update`: fetch → resumo local/remoto → commit seletivo → integração (fast-forward; merge/rebase só com escolha explícita e branch de backup) → push → verificação |
 | Segurança | detecção de `.env`, chaves SSH/PEM, tokens (GitHub, AWS, Google, Slack, Stripe, OpenAI…), senhas, arquivos grandes/backup; categorias *ignorado / suspeito / segredo / falso positivo / permitido* |
 | GitHub | autenticação (GitHub CLI, `GITHUB_TOKEN`, credential helper, keyring, OAuth Device Flow com seu próprio client id), repositórios públicos/privados, info, descrição, branches, commits, permissões, limite de API |
-| IA (Gemini) | sugestão de mensagem de commit e resumo das alterações em linguagem simples — com sua própria chave, consentimento antes de enviar e remoção de segredos do diff |
+| IA (Gemini) | conversa contínua em português, inspeção consentida de arquivos/status/diffs/estrutura, sugestão de mensagem de commit e resumo — usando sua própria chave e filtrando dados sensíveis |
 | Dia a dia | branches (troca protegida com stash), histórico, diff/comparação de commits, backups (`git bundle` + zip das alterações), gerador de `.gitignore` e `README.md`, diagnóstico (`doctor`), aliases, configurações exportáveis, histórico de operações |
 | Interfaces | menu interativo (Rich com fallback em texto puro) e CLI completa com `--json`, `--batch`, códigos de saída |
 
@@ -41,6 +41,7 @@ $ gitflow
   [ 5] Criar repositório GitHub  [12] Diagnóstico do sistema
   [ 6] Gerenciar branches        [13] Configurações
   [ 7] Histórico e commits       [14] Assistente de IA (Gemini)
+                                 [15] Conversar com Gemini
   [ 0] Sair
 ```
 
@@ -88,6 +89,7 @@ gitflow update                            # sincroniza (commit + pull seguro + p
 gitflow update --strategy rebase --all -m "fix: ajuste" --batch
 gitflow commit --files src/ README.md -m "docs: atualiza"
 gitflow commit --ai                       # mensagem sugerida pelo Gemini
+gitflow ai chat                           # conversa contínua com Gemini
 gitflow scan                              # análise de segredos (exit 6 se houver)
 gitflow branch switch feature/x --stash
 gitflow history log -n 10 --json
@@ -115,9 +117,11 @@ O GitFlow funciona sem GitHub para tudo que é local. Para push via HTTPS e para
 
 1. Crie uma chave gratuita em <https://aistudio.google.com/apikey>.
 2. `export GEMINI_API_KEY=...` (Windows: `[Environment]::SetEnvironmentVariable('GEMINI_API_KEY','...','User')`).
-3. Use `gitflow commit --ai`, `gitflow ai summary` ou o menu **[14]**.
+3. Use `gitflow commit --ai`, `gitflow ai summary`, `gitflow ai chat` ou a opção **[15]**.
 
 Modelo padrão: `gemini-3.1-pro-preview` (`gitflow config set ai.model gemini-3.1-flash-lite` para algo mais rápido e barato; `gitflow ai models` lista os disponíveis). Antes de enviar, o GitFlow mostra quais arquivos vão, **exclui arquivos sensíveis** (`.env`, chaves…), **oculta linhas com possíveis segredos** e pede confirmação (`ai.confirm_send`). O código enviado é processado pelo Google conforme os termos da API Gemini.
+
+No chat, use `/sair` para encerrar, `/limpar` para apagar o histórico da sessão, `/arquivo <caminho>` para analisar um arquivo e `/repo`, `/status` ou `/diff` para fornecer contexto do repositório. Arquivos fora do projeto, `.env`, metadados Git, binários e arquivos sensíveis são bloqueados; linhas com possíveis segredos são omitidas. O contexto só é enviado após confirmação quando `ai.confirm_send` está ativado.
 
 ## Segurança
 

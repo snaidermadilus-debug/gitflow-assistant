@@ -140,6 +140,7 @@ class Menu:
             (t("menu.a_commit"), lambda: ["commit", "--ai"]),
             (t("menu.a_login"), lambda: ["ai", "login"]),
             (t("menu.a_models"), lambda: ["ai", "models"]),
+            (t("menu.a_chat"), lambda: ["ai", "chat"]),
         ])
 
     # --------------------------------------------------------------- loop
@@ -159,6 +160,7 @@ class Menu:
             (t("menu.12"), lambda: self.run(["doctor"])),
             (t("menu.13"), self.settings),
             (t("menu.14"), self.ai),
+            (t("menu.15"), lambda: self.run(["ai", "chat"])),
         ]
         while True:
             self.header()

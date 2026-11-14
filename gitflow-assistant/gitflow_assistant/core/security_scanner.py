@@ -94,6 +94,8 @@ class SecurityScanner:
     def __init__(self, max_file_size_mb: int = 50, max_content_kb: int = 1024,
                  exclude_patterns: Sequence[str] = (), allow_patterns: Sequence[str] = (),
                  false_positives: Sequence[str] = ()) -> None:
+        if max_file_size_mb <= 0 or max_content_kb <= 0:
+            raise ValueError("security scan size limits must be positive")
         self.max_file_size = int(max_file_size_mb) * 1024 * 1024
         self.max_content = int(max_content_kb) * 1024
         self.exclude_patterns = list(exclude_patterns)
@@ -113,7 +115,7 @@ class SecurityScanner:
         return Finding(path, category, rule, description, line, excerpt, fp)
 
     def _scan_stream(self, path: str, stream: io.BufferedIOBase, size: int, report: ScanReport) -> None:
-        head = stream.read(8192)
+        head = stream.read(min(8192, self.max_content))
         if b"\x00" in head:
             report.skipped_binary.append(path)
             return

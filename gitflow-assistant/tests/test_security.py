@@ -35,6 +35,16 @@ def test_generic_assignment_levels() -> None:
     assert "abc12345" not in weak[0].excerpt
 
 
+def test_entropy_and_scan_content_limit(tmp_path: Path) -> None:
+    from gitflow_assistant.security.secret_detector import shannon_entropy
+
+    assert shannon_entropy("ab") == 1.0
+    content = "x = 1\n" * 200 + f'GITHUB = "{GH_TOKEN}"\n'
+    (tmp_path / "large.py").write_text(content, encoding="utf-8")
+    report = SecurityScanner(max_content_kb=1).scan_files(tmp_path, ["large.py"])
+    assert not report.secrets and report.truncated == ["large.py"]
+
+
 def test_name_rules() -> None:
     assert check_name("config/.env")[1] == CONFIRMED
     assert check_name("keys/id_ed25519")[1] == CONFIRMED

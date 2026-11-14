@@ -13,7 +13,7 @@ import json
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_MODEL = "gemini-3.1-pro-preview"
@@ -102,6 +102,24 @@ class GeminiClient:
             config["thinkingConfig"] = {"thinkingLevel": thinking_level}
         body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
                 "systemInstruction": {"parts": [{"text": system}]}, "generationConfig": config}
+        return text_from_response(self._call("POST", f"{self.base_url}/models/{self.model}:generateContent", body))
+
+    def generate_chat(self, messages: Sequence[Dict[str, str]], system: str, max_output_tokens: int = 4096,
+                      temperature: float = 0.7, thinking_level: Optional[str] = "low") -> str:
+        """Generate a reply from a complete user/model conversation history."""
+        if not messages:
+            raise GeminiError(0, "chat history is empty")
+        contents = []
+        for message in messages:
+            role, text = message.get("role"), message.get("text", "")
+            if role not in ("user", "model") or not text.strip():
+                raise GeminiError(0, "invalid chat history")
+            contents.append({"role": role, "parts": [{"text": text}]})
+        config: Dict[str, Any] = {"temperature": temperature, "maxOutputTokens": max_output_tokens}
+        if thinking_level:
+            config["thinkingConfig"] = {"thinkingLevel": thinking_level}
+        body = {"contents": contents, "systemInstruction": {"parts": [{"text": system}]},
+                "generationConfig": config}
         return text_from_response(self._call("POST", f"{self.base_url}/models/{self.model}:generateContent", body))
 
     def list_models(self) -> List[str]:

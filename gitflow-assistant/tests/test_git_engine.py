@@ -91,6 +91,16 @@ def test_option_injection_rejected(repo: Path) -> None:
     assert "-n" in engine.staged_files()
 
 
+def test_staged_blob_errors_are_not_reported_as_empty(repo: Path) -> None:
+    engine = GitEngine(repo)
+    with pytest.raises(GitError, match="cannot read staged file"):
+        engine.staged_blob("missing.txt", 1024)
+    with pytest.raises(GitError, match="cannot read staged file size"):
+        engine.staged_size("missing.txt")
+    with pytest.raises(ValidationError, match="maximum staged blob size"):
+        engine.staged_blob("README.md", 0)
+
+
 def test_branches_create_switch_delete(repo: Path) -> None:
     engine = GitEngine(repo)
     engine.create_branch("feature/x")
@@ -162,6 +172,13 @@ def test_timeout_is_reported(repo: Path) -> None:
 def test_redaction() -> None:
     assert redact("https://user:ghp_abcdefghijklmnopqrstuvwxyz0123456789@github.com/x") == "https://***@github.com/x"
     assert "ghp_" not in redact("token ghp_abcdefghijklmnopqrstuvwxyz0123456789")
+
+
+def test_query_credentials_are_redacted() -> None:
+    assert redact("https://example.com/repo?access_token=secret&ref=main") == \
+        "https://example.com/repo?access_token=***&ref=main"
+    assert redact("https://example.com/repo?apiKey=secret") == \
+        "https://example.com/repo?apiKey=***"
 
 
 def test_log_diff_integrity_bundle(repo: Path, tmp_path: Path) -> None:

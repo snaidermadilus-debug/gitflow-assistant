@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from gitflow_assistant.core.configuration import Configuration
+from gitflow_assistant.core.configuration import ConfigError, Configuration
 from gitflow_assistant.core.git_engine import GitEngine
 from gitflow_assistant.core.github_client import GitHubClient
 from gitflow_assistant.core.repository_manager import RepositoryManager
@@ -37,9 +37,13 @@ class AppContext:
 
     def scanner(self) -> SecurityScanner:
         """SecurityScanner configured from the security settings."""
+        max_file_size_mb = int(self.config.get("security.max_file_size_mb", 50))
+        max_content_kb = int(self.config.get("security.max_content_scan_kb", 1024))
+        if max_file_size_mb <= 0 or max_content_kb <= 0:
+            raise ConfigError("security scan size limits must be greater than zero")
         return SecurityScanner(
-            max_file_size_mb=int(self.config.get("security.max_file_size_mb", 50)),
-            max_content_kb=int(self.config.get("security.max_content_scan_kb", 1024)),
+            max_file_size_mb=max_file_size_mb,
+            max_content_kb=max_content_kb,
             exclude_patterns=self.config.get("security.exclude_patterns") or [],
             allow_patterns=self.config.get("security.allow_patterns") or [],
             false_positives=self.config.get("security.false_positives") or [],

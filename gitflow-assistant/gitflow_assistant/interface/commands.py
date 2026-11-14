@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 from gitflow_assistant.core.commit_manager import build_conventional
-from gitflow_assistant.core.git_engine import GitEngine
+from gitflow_assistant.core.git_engine import GitEngine, GitError
 from gitflow_assistant.core.github_client import GitHubClient, GitHubError, parse_github_remote
 from gitflow_assistant.core.project_detector import ProjectInfo, detect_project, find_repositories
 from gitflow_assistant.core.security_scanner import IGNORED
@@ -463,14 +463,14 @@ def cmd_config(ctx: AppContext, args: argparse.Namespace) -> int:
             raise UsageError(t("config.unknown", key=args.key))
         _ui(ctx).out.emit_json(value) if isinstance(value, (dict, list)) else ctx.ui.text_block(str(value))
     elif action == "set":
+        if args.key == "git.user_email" and args.value:
+            from gitflow_assistant.utils.validators import validate_email
+            validate_email(args.value)
         value = cfg.set(args.key, args.value)
         cfg.save()
         ctx.ui.success(t("config.saved", key=args.key, value=value))
         if args.key in ("git.user_name", "git.user_email") and value:
             git_key = "user.name" if args.key == "git.user_name" else "user.email"
-            if args.key == "git.user_email":
-                from gitflow_assistant.utils.validators import validate_email
-                validate_email(str(value))
             if ctx.ui.confirm(t("config.apply_git", key=git_key)):
                 GitEngine(Path.cwd()).set_config(git_key, str(value), global_scope=True)
                 ctx.ui.success(t("config.applied_git", key=git_key))
@@ -713,6 +713,104 @@ def cmd_backup(ctx: AppContext, args: argparse.Namespace) -> int:
     return 0
 
 
+def _chat_context(ctx: AppContext, command: str, argument: str) -> Optional[Tuple[str, str]]:
+    from gitflow_assistant.services.ai_service import (
+        is_sensitive_project_path,
+        read_safe_project_file,
+        repository_context,
+        sanitize_diff,
+    )
+
+    if command == "/arquivo":
+        if not argument:
+            raise UsageError(t("ai.chat_file_usage"))
+        engine = ctx.require_repo()
+        limit = int(ctx.config.get("ai.max_diff_kb", 60)) * 1024
+        return "arquivo", read_safe_project_file(engine.root() or engine.cwd, argument, limit)
+    if command == "/repo":
+        engine = ctx.require_repo()
+        return "repositório", repository_context(engine)
+    if command == "/status":
+        engine = ctx.require_repo()
+        status = engine.status()
+        changes = [f"{item.code} {item.path}" for item in status.files
+                   if not is_sensitive_project_path(item.path)]
+        content = (f"Branch: {status.branch or '(detached)'}\nGit status:\n" +
+                   ("\n".join(changes) if changes else "(limpo)"))
+        return "status do Git", content
+    if command == "/diff":
+        engine = ctx.require_repo()
+        limit = int(ctx.config.get("ai.max_diff_kb", 60)) * 1024
+        diff = engine.diff() + "\n" + engine.diff(staged=True)
+        prepared = sanitize_diff(diff, limit)
+        if not prepared.text.strip():
+            raise UsageError(t("ai.no_diff"))
+        return "diff sanitizado", prepared.text
+    return None
+
+
+def _chat_gemini(ctx: AppContext, assistant: object) -> int:
+    from gitflow_assistant.core.gemini_client import GeminiError
+    from gitflow_assistant.services.ai_service import AIAssistant
+    from gitflow_assistant.services.errors import ServiceError
+
+    if not ctx.ui.interactive:
+        raise UsageError(t("ai.chat_interactive"))
+    assert isinstance(assistant, AIAssistant)
+    assistant.client()
+    history: List[Dict[str, str]] = []
+    ctx.ui.heading(t("ai.chat_title"))
+    ctx.ui.info(t("ai.chat_commands"))
+    while True:
+        try:
+            message = ctx.ui.ask(t("ai.chat_prompt"), "").strip()
+        except (Cancelled, KeyboardInterrupt):
+            ctx.ui.info(t("ai.chat_exit"))
+            return 0
+        if not message:
+            continue
+        command, _, argument = message.partition(" ")
+        command = command.lower()
+        if command in ("/sair", "/exit", "/quit"):
+            ctx.ui.info(t("ai.chat_exit"))
+            return 0
+        if command in ("/limpar", "/clear"):
+            history.clear()
+            ctx.ui.success(t("ai.chat_cleared"))
+            continue
+        if command in ("/ajuda", "/help", "/?"):
+            ctx.ui.info(t("ai.chat_commands"))
+            continue
+
+        try:
+            context = _chat_context(ctx, command, argument.strip()) if command.startswith("/") else None
+            if command.startswith("/") and context is None:
+                ctx.ui.warning(t("ai.chat_unknown"))
+                continue
+            prompt = (f"Analise o contexto de {context[0]} abaixo e responda em português à solicitação do usuário. "
+                      f"Considere a solicitação: {argument.strip() or 'Faça uma análise geral.'}\n\n"
+                      f"<contexto>\n{context[1]}\n</contexto>") if context else message
+            if context and bool(ctx.config.get("ai.confirm_send", True)):
+                ctx.ui.info(t("ai.chat_context_consent", kind=context[0]))
+                if not ctx.ui.confirm(t("ai.consent"), True):
+                    continue
+            history.append({"role": "user", "text": prompt})
+            try:
+                answer = assistant.chat(history)
+            except GeminiError:
+                history.pop()
+                raise
+            history.append({"role": "model", "text": answer})
+            ctx.ui.text_block(answer, "markdown")
+        except GeminiError as exc:
+            ctx.ui.error(t("ai.failed", error=str(exc)))
+            hint = _gemini_hint(exc.status)
+            if hint:
+                ctx.ui.info(hint.strip())
+        except (ServiceError, GitError, OSError) as exc:
+            ctx.ui.warning(str(exc))
+
+
 def cmd_ai(ctx: AppContext, args: argparse.Namespace) -> int:
     from gitflow_assistant.core.gemini_client import GeminiClient, GeminiError
     from gitflow_assistant.services.ai_service import AIAssistant, staged_or_worktree_diff
@@ -762,6 +860,8 @@ def cmd_ai(ctx: AppContext, args: argparse.Namespace) -> int:
             ctx.ui.success(t("github.logged_out") if removed else t("github.nothing_stored"))
             return 0
         assistant = AIAssistant(ctx)
+        if action == "chat":
+            return _chat_gemini(ctx, assistant)
         if action == "models":
             models = assistant.client().list_models()
             if _json(ctx):

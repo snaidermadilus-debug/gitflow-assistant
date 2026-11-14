@@ -19,8 +19,16 @@ from gitflow_assistant.utils.path_manager import config_dir, ensure_dir
 
 DEFAULTS_FILE = Path(__file__).resolve().parent.parent / "config" / "defaults.yaml"
 CONFIG_FILENAME = "config.json"
-_SECRET_KEY = re.compile(r"(?:^|[_.-])(?:token|secret|password|passwd|private_key|api_key|apikey|credentials?)$",
-                         re.IGNORECASE)
+_SECRET_KEY = re.compile(
+    r"(?:^|[_.-])(?:token|secret|password|passwd|private[_-]?key|secret[_-]?key|"
+    r"api[_-]?key|access[_-]?key|gemini[_-]?key|credentials?)(?:$|[_.-])",
+    re.IGNORECASE,
+)
+
+
+def _is_secret_key(key: str) -> bool:
+    normalized = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", key)
+    return bool(_SECRET_KEY.search(normalized))
 
 
 class ConfigError(ValueError):
@@ -149,7 +157,7 @@ def strip_secrets(data: Dict[str, Any]) -> Dict[str, Any]:
     """Return a copy without secret-looking keys (recursive)."""
     clean: Dict[str, Any] = {}
     for key, value in data.items():
-        if _SECRET_KEY.search(key):
+        if _is_secret_key(key):
             continue
         clean[key] = strip_secrets(value) if isinstance(value, dict) else copy.deepcopy(value)
     return clean
@@ -276,6 +284,11 @@ class Configuration:
                 raise ConfigError(f"{key} expects an integer") from exc
             if number < 0:
                 raise ConfigError(f"{key} must be positive")
+            if number == 0 and key in {
+                "timeouts.git", "timeouts.network", "security.max_file_size_mb",
+                "security.max_content_scan_kb", "ai.max_diff_kb",
+            }:
+                raise ConfigError(f"{key} must be greater than zero")
             return number
         if isinstance(default, list):
             return [p.strip() for p in text.split(",") if p.strip()]
@@ -299,7 +312,7 @@ class Configuration:
         def walk(node: Dict[str, Any], prefix: str) -> None:
             for key, value in node.items():
                 full = f"{prefix}{key}"
-                if _SECRET_KEY.search(key):
+                if _is_secret_key(key):
                     ignored.append(full)
                     continue
                 if full.startswith("aliases."):

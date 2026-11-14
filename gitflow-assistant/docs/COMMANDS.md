@@ -23,7 +23,7 @@ Opções globais (podem aparecer em qualquer posição): `-C/--project CAMINHO`,
 | `untrack CAMINHO...` | parar de rastrear (mantém no disco) | `--delete` (arriscado) |
 | `remote [list\|set\|remove]` | remotos | `set origin URL` |
 | `github [status\|login\|logout\|repos\|create\|info\|describe\|branches\|commits]` (`gh`) | GitHub | `login --device\|--token-stdin --store`, `create NOME --private --set-remote` |
-| `ai [status\|login\|logout\|models\|commit-message\|summary]` | IA Gemini | `login --key-stdin --store`, `summary [REF REF] --staged` |
+| `ai [status\|login\|logout\|models\|commit-message\|summary\|chat]` | IA Gemini | `login --key-stdin --store`, `summary [REF REF] --staged`, `chat` (loop interativo) |
 | `gitignore` | gera/completa `.gitignore` | `--print`, `--language python node` |
 | `readme` | gera `README.md` | `--description`, `--print`, `--overwrite` |
 | `backup [create\|list]` | backup seguro (bundle + zip) | — |
@@ -42,6 +42,8 @@ gitflow --json status | python -c "import json,sys; print(json.load(sys.stdin)['
 ```
 
 Em modo `--batch`, qualquer dado ausente gera erro de uso (código 2) em vez de uma pergunta; operações arriscadas exigem `--yes --allow-risky`; enviar código à IA exige `--yes`.
+
+No chat (`gitflow ai chat` ou menu **[15]**), `/sair` encerra, `/limpar` reinicia o histórico em memória, `/arquivo CAMINHO` envia um arquivo permitido, e `/repo`, `/status` e `/diff` fornecem contexto filtrado do projeto.
 
 ## Principais chaves de configuração
 

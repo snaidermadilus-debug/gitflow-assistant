@@ -10,6 +10,7 @@ import fnmatch
 import hashlib
 import math
 import re
+from collections import Counter
 from dataclasses import dataclass
 from typing import Iterable, Iterator, List, Optional, Pattern, Tuple
 
@@ -115,7 +116,7 @@ def shannon_entropy(value: str) -> float:
     """Shannon entropy in bits per character."""
     if not value:
         return 0.0
-    counts = {ch: value.count(ch) for ch in set(value)}
+    counts = Counter(value)
     return -sum((c / len(value)) * math.log2(c / len(value)) for c in counts.values())
 
 
