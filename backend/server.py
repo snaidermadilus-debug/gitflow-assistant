@@ -7,7 +7,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Literal
 import uuid
 from datetime import datetime
 
@@ -46,10 +46,17 @@ class StatusCheck(BaseModel):
 class StatusCheckCreate(BaseModel):
     client_name: str
 
+class HealthCheck(BaseModel):
+    status: Literal["ok"] = "ok"
+
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
 async def root():
     return {"message": "Hello World"}
+
+@api_router.get("/health", response_model=HealthCheck)
+async def health_check():
+    return HealthCheck()
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):

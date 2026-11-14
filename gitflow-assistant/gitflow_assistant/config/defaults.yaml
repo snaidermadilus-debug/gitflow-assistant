@@ -1,0 +1,62 @@
+# GitFlow Assistant - built-in defaults.
+# User settings are stored separately (see `gitflow config path`).
+# Secrets are never stored here.
+
+language: auto            # auto | pt | en | es
+theme: auto               # auto | color | plain
+projects_dir: ""          # default directory used by `gitflow projects scan`
+editor: ""                # preferred editor command (empty = $VISUAL/$EDITOR)
+default_branch: main
+default_remote: origin
+
+git:
+  user_name: ""
+  user_email: ""
+
+commit:
+  style: conventional     # conventional | free
+  default_message: ""
+  max_subject_length: 72
+
+confirm:
+  mode: risky             # always | risky
+
+timeouts:
+  git: 60
+  network: 300
+
+scan:
+  max_depth: 3
+  max_directories: 5000
+
+security:
+  block_secrets: true
+  max_file_size_mb: 50
+  max_content_scan_kb: 1024
+  exclude_patterns: []
+  allow_patterns: []
+  false_positives: []
+
+github:
+  api_url: https://api.github.com
+  web_url: https://github.com
+  oauth_client_id: ""     # your own OAuth App client id for Device Flow (optional)
+  default_private: false
+
+history:
+  max_entries: 1000
+
+ai:
+  enabled: auto           # auto (on when a Gemini key exists) | true | false
+  provider: gemini
+  model: gemini-3.1-pro-preview   # faster/cheaper: gemini-3.1-flash-lite
+  confirm_send: true      # ask before sending a diff to Google
+  max_diff_kb: 60
+  timeout: 90
+  summary_before_commit: true
+
+aliases:
+  st: status
+  up: update
+  pub: upload
+  co: commit

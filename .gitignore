@@ -31,6 +31,9 @@ dist/
 dist
 
 # Environment files (comprehensive coverage)
+.env
+.env.*
+!.env.example
 
 *token.json*
 *credentials.json*
@@ -77,6 +80,12 @@ agenthub/agents/youtube/db
 .cache/
 
 memory/test_credentials.md
+/memory/
+/.emergent/cron/
+/.emergent/scripts/adhoc/
+/.emergent/system_deps.txt
+/.config/
+/.local/
 
 # Mobile development
 android-sdk/
@@ -86,3 +95,4 @@ android-sdk/
 
 # overlay black-box crash/user-report dumps — session data, never history
 **/.emergent/recordings/
+projeto.tar.gz

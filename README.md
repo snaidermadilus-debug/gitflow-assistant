@@ -1,16 +1,19 @@
-# farm-ts
+# GitFlow Assistant preview
 
-Minimal split backend/frontend starter: **FastAPI + MongoDB** behind a
-**Vite + React 19 + TypeScript** frontend, joined by a small typed fetch layer
-over `/api`. This is a bare skeleton — no app features are implemented. Build on
-top of it.
+Static **Vite + React 19 + TypeScript** presentation for the GitFlow Assistant
+CLI in [`gitflow-assistant/`](./gitflow-assistant/), with a small **FastAPI +
+MongoDB** service behind `/api`. The page presents CLI installation guidance
+and remains usable when the API is unavailable; `GET /api/health` only powers
+its connectivity indicator. Git operations run through the local CLI, not this
+web page.
 
 ## Layout
 
 ```
-farm-ts/
+GitFlow Assistant/
   backend/   FastAPI + motor (async MongoDB) + Pydantic v2 — python, /root/.venv
   frontend/  Vite + React 19 + Tailwind v4 + shadcn/ui (TypeScript strict)
+  gitflow-assistant/  standalone Python CLI, docs, installers and tests
   tests/     Playwright e2e workspace (pre-scaffolded)
 ```
 
@@ -54,6 +57,9 @@ FastAPI, async throughout. `python` is the app venv interpreter
   FastAPI validates the request against the Pydantic model before your handler
   runs — a malformed body never reaches your code, it gets an automatic `422`
   with a `{"detail": [...]}` body.
+- **Health**: `GET /api/health` returns `{"status":"ok"}` without contacting
+  MongoDB. The static CLI landing page displays this endpoint's availability
+  but never gates its content on the response.
 - **Growing the backend**: as `server.py` gets crowded, move models to
   `backend/models/` and routers to `backend/routers/` (one module per resource,
   each exporting its own `APIRouter`, mounted from `server.py` via
@@ -102,12 +108,11 @@ FastAPI, async throughout. `python` is the app venv interpreter
   yourself as a TS interface mirroring the endpoint's Pydantic model, and keeping
   the two in sync is a manual discipline. When you change a Pydantic model,
   change its TS interface in the same edit.
-- `src/pages/Home.tsx` is a minimal example of the wiring: TanStack Query's `useQuery`
-  with `apiGet<StatusCheck[]>("/status")` as the `queryFn`. It is a **non-blocking
-  connectivity probe**, not a proof of the round trip — the result is deliberately
-  discarded so the splash renders identically with no backend. `apiGet<T>` does no
-  runtime validation either; `T` is your assertion, not a check. See the
-  static-preview rule in `TEMPLATE.md` §4 for why no page may be gated on a fetch.
+- `src/pages/Home.tsx` is the static CLI landing page. It uses TanStack Query's
+  `useQuery` with `apiGet<ApiHealth>("/health")` to display API connectivity;
+  that request is **non-blocking**, and the CLI guide remains usable when the
+  backend is unavailable. `apiGet<T>` does no runtime validation either; `T`
+  is your assertion, not a check.
 
 ## TypeScript
 

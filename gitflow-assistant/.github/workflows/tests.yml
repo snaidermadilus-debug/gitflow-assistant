@@ -1,0 +1,31 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.9", "3.12"]
+        extras: ["full", "minimal"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          if [ "${{ matrix.extras }}" = "full" ]; then pip install -e ".[full,dev]"; else pip install -e ".[dev]"; fi
+      - name: Run tests
+        run: python -m pytest -q
+      - name: CLI smoke test
+        run: |
+          gitflow --version
+          gitflow --batch doctor --offline

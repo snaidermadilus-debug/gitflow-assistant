@@ -1,0 +1,5 @@
+# GitFlow Assistant has NO mandatory dependencies (Python standard library only).
+# Optional, pure-Python extras (safe on Termux):
+rich>=13        # colourful TUI, tables and spinners (plain-text fallback without it)
+PyYAML>=6       # YAML parser (built-in mini parser is used without it)
+# keyring>=24   # optional secure credential storage on desktop systems
